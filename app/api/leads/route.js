@@ -2,7 +2,7 @@ export async function GET() {
   try {
     const url = process.env.ODOO_URL;
 
-    // 🔐 LOGIN (obtiene UID automáticamente)
+    // LOGIN
     const login = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -24,7 +24,7 @@ export async function GET() {
     const loginData = await login.json();
     const uid = loginData.result;
 
-    // 📊 CONSULTA LEADS
+    // LEADS
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -51,7 +51,13 @@ export async function GET() {
 
     const data = await response.json();
 
-    return Response.json(data.result);
+    // 🔥 LIMPIEZA
+    const cleanData = data.result.map((lead) => ({
+      name: lead.name,
+      create_date: lead.create_date,
+    }));
+
+    return Response.json(cleanData);
 
   } catch (error) {
     return Response.json({ error: error.message });
