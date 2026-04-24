@@ -49,15 +49,20 @@ export async function GET() {
       })
     });
 
-    const data = await response.json();
+const data = await response.json();
 
-    // 🔥 LIMPIEZA
-    const cleanData = data.result.map((lead) => ({
-      name: lead.name,
-      create_date: lead.create_date,
-    }));
+// 🔥 VALIDACIÓN
+if (!data.result) {
+  return Response.json(data);
+}
 
-    return Response.json(cleanData);
+// 🔥 LIMPIEZA SEGURA
+const cleanData = (data.result || []).map((lead) => ({
+  name: String(lead.name || ""),
+  create_date: String(lead.create_date || ""),
+}));
+
+return Response.json(cleanData);
 
   } catch (error) {
     return Response.json({ error: error.message });
