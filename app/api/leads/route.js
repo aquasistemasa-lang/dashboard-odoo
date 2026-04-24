@@ -1,95 +1,56 @@
 export async function GET() {
   try {
-    const url = process.env.ODOO_URL;
+    const baseUrl = process.env.ODOO_URL;
 
-    // 🔐 LOGIN
-    const loginRes = await fetch(url, {
+    // 🔐 LOGIN (web/session/authenticate)
+    const loginRes = await fetch(`${baseUrl}/web/session/authenticate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         jsonrpc: "2.0",
-        method: "call",
         params: {
-          service: "common",
-          method: "login",
-          args: [
-            process.env.ODOO_DB,
-            process.env.ODOO_USER,
-            process.env.ODOO_API_KEY
-          ]
+          db: process.env.ODOO_DB,
+          login: process.env.ODOO_USER,
+          password: process.env.ODOO_API_KEY
         }
       })
     });
 
     const loginData = await loginRes.json();
-    const uid = loginData.result;
 
-    if (!uid) {
+    if (!loginData.result || !loginData.result.uid) {
       return Response.json({
         error: "Login fallido",
         detail: loginData
       });
     }
 
-    // 🔍 1. SEARCH (IDs de productos)
-    const searchRes = await fetch(url, {
+    const uid = loginData.result.uid;
+
+    // 📦 CONSULTA PRODUCTOS
+    const dataRes = await fetch(`${baseUrl}/web/dataset/call_kw`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Cookie": loginRes.headers.get("set-cookie") || ""
+      },
       body: JSON.stringify({
         jsonrpc: "2.0",
-        method: "call",
         params: {
-          service: "object",
-          method: "execute_kw",
-          args: [
-            process.env.ODOO_DB,
-            uid,
-            process.env.ODOO_API_KEY,
-            "product.product",
-            "search",
-            [[]],
-            { limit: 20 }
-          ]
+          model: "product.product",
+          method: "search_read",
+          args: [[]],
+          kwargs: {
+            fields: ["name", "list_price"],
+            limit: 20
+          }
         }
       })
     });
 
-    const searchData = await searchRes.json();
-    const ids = searchData.result;
+    const data = await dataRes.json();
 
-    if (!ids || ids.length === 0) {
-      return Response.json([]);
-    }
-
-    // 📦 2. READ (datos de productos)
-    const readRes = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        method: "call",
-        params: {
-          service: "object",
-          method: "execute_kw",
-          args: [
-            process.env.ODOO_DB,
-            uid,
-            process.env.ODOO_API_KEY,
-            "product.product",
-            "read",
-            [ids],
-            {
-              fields: ["name", "list_price"]
-            }
-          ]
-        }
-      })
-    });
-
-    const readData = await readRes.json();
-
-    // 🔥 LIMPIEZA SEGURA
-    const cleanData = (readData.result || []).map((prod) => ({
+    const cleanData = (data.result || []).map((prod) => ({
       name: String(prod.name || ""),
       price: Number(prod.list_price || 0)
     }));
