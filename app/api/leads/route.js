@@ -2,7 +2,7 @@ export async function GET() {
   try {
     const url = process.env.ODOO_URL;
 
-    // 🔐 LOGIN (obtener UID automáticamente)
+    // 🔐 LOGIN
     const loginRes = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -22,18 +22,14 @@ export async function GET() {
     });
 
     const loginData = await loginRes.json();
-
-    if (!loginData.result) {
-      return Response.json({
-        error: "Error de login en Odoo",
-        detail: loginData
-      });
-    }
-
     const uid = loginData.result;
 
-    // 📊 CONSULTA LEADS
-    const response = await fetch(url, {
+    if (!uid) {
+      return Response.json({ error: "Login fallido", detail: loginData });
+    }
+
+    // 🔍 1. SEARCH (solo IDs)
+    const searchRes = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -47,31 +43,50 @@ export async function GET() {
             uid,
             process.env.ODOO_API_KEY,
             "crm.lead",
-            "search_read",
+            "search",
             [[]],
-            {
-              fields: ["name", "create_date"],
-              limit: 50
-            }
+            { limit: 50 }
           ]
         }
       })
     });
 
-    const data = await response.json();
+    const searchData = await searchRes.json();
+    const ids = searchData.result;
 
-    // 🔍 Si Odoo devuelve error, lo mostramos
-    if (data.error) {
-      return Response.json({
-        error: "Error desde Odoo",
-        detail: data.error
-      });
+    if (!ids || ids.length === 0) {
+      return Response.json([]);
     }
 
-    // 🔥 LIMPIEZA SEGURA (evita error JSON serializable)
-    const cleanData = (data.result || []).map((lead) => ({
-      name: lead.name ? String(lead.name) : "",
-      create_date: lead.create_date ? String(lead.create_date) : ""
+    // 📊 2. READ (ya limpio)
+    const readRes = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "call",
+        params: {
+          service: "object",
+          method: "execute_kw",
+          args: [
+            process.env.ODOO_DB,
+            uid,
+            process.env.ODOO_API_KEY,
+            "crm.lead",
+            "read",
+            [ids],
+            { fields: ["name", "create_date"] }
+          ]
+        }
+      })
+    });
+
+    const readData = await readRes.json();
+
+    // 🔥 LIMPIEZA FINAL SEGURA
+    const cleanData = (readData.result || []).map((lead) => ({
+      name: String(lead.name || ""),
+      create_date: String(lead.create_date || "")
     }));
 
     return Response.json(cleanData);
