@@ -2,8 +2,8 @@ export async function GET() {
   try {
     const url = process.env.ODOO_URL;
 
-    // LOGIN
-    const login = await fetch(url, {
+    // 🔐 LOGIN (obtener UID automáticamente)
+    const loginRes = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -21,10 +21,18 @@ export async function GET() {
       })
     });
 
-    const loginData = await login.json();
+    const loginData = await loginRes.json();
+
+    if (!loginData.result) {
+      return Response.json({
+        error: "Error de login en Odoo",
+        detail: loginData
+      });
+    }
+
     const uid = loginData.result;
 
-    // LEADS
+    // 📊 CONSULTA LEADS
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -42,29 +50,36 @@ export async function GET() {
             "search_read",
             [[]],
             {
-              fields: ["name", "create_date"]
+              fields: ["name", "create_date"],
+              limit: 50
             }
           ]
         }
       })
     });
 
-const data = await response.json();
+    const data = await response.json();
 
-// 🔥 VALIDACIÓN
-if (!data.result) {
-  return Response.json(data);
-}
+    // 🔍 Si Odoo devuelve error, lo mostramos
+    if (data.error) {
+      return Response.json({
+        error: "Error desde Odoo",
+        detail: data.error
+      });
+    }
 
-// 🔥 LIMPIEZA SEGURA
-const cleanData = (data.result || []).map((lead) => ({
-  name: String(lead.name || ""),
-  create_date: String(lead.create_date || ""),
-}));
+    // 🔥 LIMPIEZA SEGURA (evita error JSON serializable)
+    const cleanData = (data.result || []).map((lead) => ({
+      name: lead.name ? String(lead.name) : "",
+      create_date: lead.create_date ? String(lead.create_date) : ""
+    }));
 
-return Response.json(cleanData);
+    return Response.json(cleanData);
 
   } catch (error) {
-    return Response.json({ error: error.message });
+    return Response.json({
+      error: "Error interno",
+      detail: error.message
+    });
   }
 }
