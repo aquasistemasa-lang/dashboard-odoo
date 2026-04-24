@@ -72,7 +72,7 @@ export async function GET() {
             process.env.ODOO_DB,
             uid,
             process.env.ODOO_API_KEY,
-            "crm.lead",
+            "res.partner",
             "read",
             [ids],
             { fields: ["name", "create_date"] }
