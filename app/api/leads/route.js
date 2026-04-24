@@ -25,10 +25,13 @@ export async function GET() {
     const uid = loginData.result;
 
     if (!uid) {
-      return Response.json({ error: "Login fallido", detail: loginData });
+      return Response.json({
+        error: "Login fallido",
+        detail: loginData
+      });
     }
 
-    // 🔍 1. SEARCH (solo IDs)
+    // 🔍 1. SEARCH (IDs de productos)
     const searchRes = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -42,10 +45,10 @@ export async function GET() {
             process.env.ODOO_DB,
             uid,
             process.env.ODOO_API_KEY,
-            "crm.lead",
+            "product.product",
             "search",
             [[]],
-            { limit: 50 }
+            { limit: 20 }
           ]
         }
       })
@@ -58,7 +61,7 @@ export async function GET() {
       return Response.json([]);
     }
 
-    // 📊 2. READ (ya limpio)
+    // 📦 2. READ (datos de productos)
     const readRes = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -72,10 +75,12 @@ export async function GET() {
             process.env.ODOO_DB,
             uid,
             process.env.ODOO_API_KEY,
-            "res.partner",
+            "product.product",
             "read",
             [ids],
-            { fields: ["name", "create_date"] }
+            {
+              fields: ["name", "list_price"]
+            }
           ]
         }
       })
@@ -83,10 +88,10 @@ export async function GET() {
 
     const readData = await readRes.json();
 
-    // 🔥 LIMPIEZA FINAL SEGURA
-    const cleanData = (readData.result || []).map((lead) => ({
-      name: String(lead.name || ""),
-      create_date: String(lead.create_date || "")
+    // 🔥 LIMPIEZA SEGURA
+    const cleanData = (readData.result || []).map((prod) => ({
+      name: String(prod.name || ""),
+      price: Number(prod.list_price || 0)
     }));
 
     return Response.json(cleanData);
